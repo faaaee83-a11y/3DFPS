@@ -1237,7 +1237,7 @@ function updateBullets(dt){
     if(hit){
       const bot = hit.object.userData.botRef;
       if(bot) registerBotHit(bot, hit.point, hit.object.userData.isHead);
-      else if(hit.object.userData.remotePlayer){ const damage=hit.object.userData.isHead?100:30; netSend({type:'hit',damage}); state.hits++; state.score+=damage; updateAccuracy(); showHitMarker(); document.getElementById('score-display').textContent=`SCORE ${state.score}`; }
+      else if(hit.object.userData.remotePlayer){ const damage=hit.object.userData.isHead?100:30; netSend({type:'hit',damage,target:hit.object.userData.playerId}); state.hits++; state.score+=damage; updateAccuracy(); showHitMarker(); document.getElementById('score-display').textContent=`SCORE ${state.score}`; }
       else if(hit.object===lane || hit.object===ground) { drawFloorHole(hit.point, hit.face?.normal); }
       else {
         const t = targets.find(tt => tt.mesh === hit.object);
@@ -1355,7 +1355,7 @@ function receiveNetMessage(message){
   if(!message || typeof message!=='object') return;
   if(message.type==='state') netRemoteState(message);
   else if(message.type==='match-config'){ net.team=message.assignedTeam||net.team; mapSelect.value=message.map; teamMode.value=message.mode; applyMap(message.map); netSetStatus(`マッチ成立 — ${net.team.toUpperCase()} TEAM`); }
-  else if(message.type==='hit' && message.team!==net.team) damagePlayer(message.damage||25,message.from);
+  else if(message.type==='hit' && message.target===net.clientId && message.team!==net.team) damagePlayer(message.damage||25,message.from);
   else if(message.type==='chat') addChatMessage(message.text,message.team);
   else if(message.type==='shot') remoteShot(message);
   else if(message.type==='event') remoteEvent(message);
@@ -1417,7 +1417,7 @@ document.getElementById('match-join').addEventListener('click',joinMatch);
 document.getElementById('match-quick').addEventListener('click',quickMatch);
 document.getElementById('match-leave').addEventListener('click',leaveMatch);
 function netRemoteState(m){
-  const playerId=m.from||'peer'; let r=remotePlayers.get(playerId); if(!r){r=new THREE.Group(); const body=new THREE.Mesh(new THREE.BoxGeometry(.42,1.1,.3),new THREE.MeshStandardMaterial({color:m.team==='red'?0xd34848:0x3f8cff}));body.position.y=1; const head=new THREE.Mesh(new THREE.SphereGeometry(.2,10,8),new THREE.MeshStandardMaterial({color:0x77bbff}));head.position.y=1.7;body.userData.remotePlayer=true; head.userData.remotePlayer=true; r.add(body,head);scene.add(r);remotePlayers.set(playerId,r);}
+  const playerId=m.from||'peer'; let r=remotePlayers.get(playerId); if(!r){r=new THREE.Group(); const body=new THREE.Mesh(new THREE.BoxGeometry(.42,1.1,.3),new THREE.MeshStandardMaterial({color:m.team==='red'?0xd34848:0x3f8cff}));body.position.y=1; const head=new THREE.Mesh(new THREE.SphereGeometry(.2,10,8),new THREE.MeshStandardMaterial({color:0x77bbff}));head.position.y=1.7;body.userData.remotePlayer=true; head.userData.remotePlayer=true; body.userData.playerId=playerId; head.userData.playerId=playerId; r.add(body,head);scene.add(r);remotePlayers.set(playerId,r);}
   r.position.lerp(new THREE.Vector3(m.x,m.y,m.z),.35); r.rotation.y=m.yaw;
 }
 function remoteShot(m){flashLight.intensity=2; flashSprite.material.opacity=.7;}
