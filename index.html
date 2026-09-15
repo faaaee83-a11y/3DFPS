@@ -1509,7 +1509,9 @@ document.addEventListener('pointerlockchange', ()=>{
   if(useTouchUI) return;
   const wasLocked = state.locked;
   state.locked = (document.pointerLockElement === renderer.domElement);
-  if(wasLocked && !state.locked && !suppressStartScreenToggle){
+  // A network death can release pointer lock while the killer camera is active.
+  // Keep the player in the match instead of exposing the main menu.
+  if(wasLocked && !state.locked && !suppressStartScreenToggle && !state.onlineMatch){
     state.gameActive = false;
     startScreen.classList.remove('hide');
   }
@@ -1796,8 +1798,10 @@ function damagePlayer(amount,killerId=null){
   if(state.playerHP===0){
     if(state.onlineMatch){
       state.lives--; state.spectatingId=killerId; netSend({type:'event',name:'eliminated',killerId});
-      if(state.teamMode==='elimination' && state.lives<=0){ state.gameActive=false; startScreen.classList.remove('hide'); document.getElementById('start-instructions').textContent='ELIMINATED — 新しい P2P マッチを開始してください。'; }
-      else { netSetStatus(`被弾 — ${state.teamMode==='elimination'?'残機 '+state.lives:'3秒後にリスポーン'}`); setTimeout(respawnOnline,3000); }
+      // Online matches never return to the main menu on death: spectate first, then respawn.
+      if(state.teamMode==='elimination' && state.lives<=0) state.lives=3;
+      netSetStatus(`撃破 — ${state.teamMode==='elimination'?'残機をリセット':'3秒後にリスポーン'}（キラー視点で観戦中）`);
+      setTimeout(respawnOnline,3000);
     } else { state.gameActive=false; startScreen.classList.remove('hide'); document.getElementById('start-instructions').textContent='撃破されました。BOT ARENAで再挑戦してください。'; }
   }
 }
