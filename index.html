@@ -216,7 +216,7 @@
 <div id="damage-flash"></div>
 <div id="reload-stage"></div>
 <div id="equipment-display">G 手榴弾 2　B 爆弾 1　V ドローン</div>
-<div id="net-panel"><div class="net-inner"><h2>P2P TEAM MATCH</h2><p>ルームコードでホストと直接接続します。ホストは人数上限を決め、RED／BLUE チームで対戦できます。</p><div id="net-status" role="status">未接続</div><div class="net-row"><input id="match-room" class="net-area" style="min-height:42px;flex:1" maxlength="8" autocomplete="off" placeholder="ルームコード"><button class="net-btn" id="match-quick">クイック開始</button></div><div class="net-row"><label>FORMAT <select id="match-max"><option value="2">1 vs 1</option><option value="4" selected>2 vs 2</option><option value="6">3 vs 3</option><option value="8">4 vs 4</option></select></label></div><div class="net-row"><button class="net-btn" id="match-create">ルーム作成</button><button class="net-btn" id="match-join">ルーム参加</button><button class="net-btn" id="match-leave">退出</button></div><p id="match-room-label" style="color:#ffe15a;font-size:14px"></p><p style="font-size:11px;opacity:.65">RED / BLUE はホストが自動で均等に振り分けます。倒された後はキラー視点で観戦し、3秒後にリスポーンします。チャットは Enter キーでも開けます。</p><div class="net-row"><button class="net-btn" id="net-close">閉じる</button></div></div></div>
+<div id="net-panel"><div class="net-inner"><h2>P2P TEAM MATCH</h2><p>ルームコードでホストと直接接続します。ホストは人数上限を決め、RED／BLUE チームで対戦できます。</p><div id="net-status" role="status">未接続</div><div class="net-row"><input id="match-room" class="net-area" style="min-height:42px;flex:1" maxlength="8" autocomplete="off" placeholder="ルームコード"><button class="net-btn" id="match-quick">クイック開始</button></div><div class="net-row"><label>FORMAT <select id="match-max"><option value="2">1 vs 1</option><option value="4" selected>2 vs 2</option><option value="6">3 vs 3</option><option value="8">4 vs 4</option></select></label></div><div class="net-row"><button class="net-btn" id="match-create">ルーム作成</button><button class="net-btn" id="match-join">ルーム参加</button><button class="net-btn" id="match-leave">退出</button><button class="net-btn" id="match-start" disabled>ゲーム開始（HOST）</button></div><div id="match-roster" aria-live="polite" style="font-size:12px;line-height:1.7;color:#dfe"></div><p id="match-room-label" style="color:#ffe15a;font-size:14px"></p><p style="font-size:11px;opacity:.65">RED / BLUE はホストが自動で均等に振り分けます。倒された後はキラー視点で観戦し、3秒後にリスポーンします。チャットは Enter キーでも開けます。</p><div class="net-row"><button class="net-btn" id="net-close">閉じる</button></div></div></div>
 <div id="player-health"><div></div></div>
 <div id="chat-panel" aria-label="match chat"><div id="chat-log"></div><form id="chat-form"><input id="chat-input" maxlength="140" autocomplete="off" placeholder="Enterでチャット"><button id="chat-send" type="submit">送信</button></form></div>
 <div id="screen-shake-layer"></div>
@@ -1333,9 +1333,10 @@ const matchRoom=document.getElementById('match-room');
 const matchRoomLabel=document.getElementById('match-room-label');
 const matchMax=document.getElementById('match-max');
 const chatPanel=document.getElementById('chat-panel'); const chatLog=document.getElementById('chat-log'); const chatForm=document.getElementById('chat-form'); const chatInput=document.getElementById('chat-input');
+const matchStart=document.getElementById('match-start'); const matchRoster=document.getElementById('match-roster');
 const PEER_PREFIX='3dfps-room-';
 let peer=null;
-net.clientId=Math.random().toString(36).slice(2,10); net.maxPlayers=4; net.team='red'; net.connections=new Map();
+net.clientId=Math.random().toString(36).slice(2,10); net.maxPlayers=4; net.team='red'; net.connections=new Map(); net.roster=[];
 function netSetStatus(t){netStatus.textContent=t;}
 function makeRoomCode(){return Math.random().toString(36).slice(2,8).toUpperCase();}
 function cleanRoomCode(value){return value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);}
@@ -1345,6 +1346,22 @@ function netSend(message){
   if(net.role==='host') net.connections.forEach(send); else send(net.dc);
 }
 function relayMessage(message,except){ if(net.role==='host') net.connections.forEach(connection=>{if(connection!==except && connection.open) connection.send(message);}); }
+function updateRoster(players){
+  net.roster=players||[];
+  matchRoster.innerHTML=net.roster.map((player,index)=>`<div style="color:${player.team==='red'?'#ff9b9b':'#9bc7ff'}">${player.team==='red'?'RED':'BLUE'} — ${player.name||`PLAYER ${index+1}`}</div>`).join('') || '<span style="opacity:.7">参加者を待っています…</span>';
+}
+function sendLobbyState(){
+  if(net.role!=='host') return;
+  const players=[{name:'HOST',team:'red'},...Array.from(net.connections.values()).map((connection,index)=>({name:`PLAYER ${index+2}`,team:connection.assignedTeam||'blue'}))];
+  updateRoster(players);
+  net.connections.forEach(connection=>{if(connection.open)connection.send({type:'lobby',players});});
+  matchStart.disabled=net.connections.size===0;
+}
+function startOnlineMatch(){
+  if(net.role!=='host' || net.connections.size===0) return;
+  netSend({type:'match-start'}); netSetStatus('ゲーム開始'); netPanel.classList.remove('show'); startGame(false);
+}
+
 function closePeer(){
   net.connections.forEach(connection=>connection.close()); net.connections.clear();
   if(net.dc){net.dc.close(); net.dc=null;}
@@ -1354,7 +1371,9 @@ function closePeer(){
 function receiveNetMessage(message){
   if(!message || typeof message!=='object') return;
   if(message.type==='state') netRemoteState(message);
-  else if(message.type==='match-config'){ net.team=message.assignedTeam||net.team; mapSelect.value=message.map; teamMode.value=message.mode; applyMap(message.map); netSetStatus(`マッチ成立 — ${net.team.toUpperCase()} TEAM`); }
+  else if(message.type==='match-config'){ net.team=message.assignedTeam||net.team; mapSelect.value=message.map; teamMode.value=message.mode; applyMap(message.map); netSetStatus(`ロビー参加 — ${net.team.toUpperCase()} TEAM`); }
+  else if(message.type==='lobby') updateRoster(message.players);
+  else if(message.type==='match-start'){ netSetStatus('ゲーム開始'); netPanel.classList.remove('show'); startGame(false); }
   else if(message.type==='hit' && message.target===net.clientId && message.team!==net.team) damagePlayer(message.damage||25,message.from);
   else if(message.type==='chat') addChatMessage(message.text,message.team);
   else if(message.type==='shot') remoteShot(message);
@@ -1369,18 +1388,17 @@ function attachConnection(connection){
   connection.on('open',()=>{
     net.connected=true;
     if(net.role==='host') connection.send({type:'match-config',map:mapSelect.value,mode:teamMode.value,maxPlayers:net.maxPlayers,assignedTeam:connection.assignedTeam});
-    netSetStatus('マッチ成立 — P2P 接続中');
-    netPanel.classList.remove('show');
-    startGame(false);
+    if(net.role==='host'){ sendLobbyState(); netSetStatus('ロビー待機中 — ゲーム開始を押してください'); }
+    else netSetStatus('ロビー参加中 — ホストの開始を待っています');
   });
   connection.on('close',()=>{
-    net.connections.delete(connection.peer); net.players=net.connections.size; if(net.role!=='host' || net.connections.size===0){net.connected=false; netSetStatus('相手が退出しました');}
+    net.connections.delete(connection.peer); net.players=net.connections.size; if(net.role==='host') sendLobbyState(); if(net.role!=='host' || net.connections.size===0){net.connected=false; netSetStatus('相手が退出しました');}
   });
   connection.on('error',()=>netSetStatus('P2P 接続エラー。もう一度お試しください。'));
 }
 function createMatch(){
   closePeer();
-  net.room=makeRoomCode(); net.role='host'; net.team='red'; net.maxPlayers=Number(matchMax.value); net.players=0;
+  net.room=makeRoomCode(); net.role='host'; net.team='red'; net.maxPlayers=Number(matchMax.value); net.players=0; updateRoster([{name:'HOST',team:'red'}]); matchStart.disabled=true;
   matchRoom.value=net.room; matchRoomLabel.textContent='ROOM: '+net.room+'（相手に共有）';
   netSetStatus('ルームを公開中… 相手の参加を待っています');
   peer=new Peer(PEER_PREFIX+net.room);
@@ -1394,7 +1412,7 @@ function createMatch(){
 function joinMatch(){
   const room=cleanRoomCode(matchRoom.value);
   if(!room){netSetStatus('ルームコードを入力してください');return;}
-  closePeer(); net.room=room; net.role='guest'; net.team='unassigned';
+  closePeer(); net.room=room; net.role='guest'; net.team='unassigned'; matchStart.disabled=true; updateRoster();
   matchRoom.value=room; matchRoomLabel.textContent='ROOM: '+room;
   netSetStatus('ホストへ接続中…');
   peer=new Peer();
@@ -1416,6 +1434,7 @@ document.getElementById('match-create').addEventListener('click',createMatch);
 document.getElementById('match-join').addEventListener('click',joinMatch);
 document.getElementById('match-quick').addEventListener('click',quickMatch);
 document.getElementById('match-leave').addEventListener('click',leaveMatch);
+matchStart.addEventListener('click',startOnlineMatch);
 function netRemoteState(m){
   const playerId=m.from||'peer'; let r=remotePlayers.get(playerId); if(!r){r=new THREE.Group(); const body=new THREE.Mesh(new THREE.BoxGeometry(.42,1.1,.3),new THREE.MeshStandardMaterial({color:m.team==='red'?0xd34848:0x3f8cff}));body.position.y=1; const head=new THREE.Mesh(new THREE.SphereGeometry(.2,10,8),new THREE.MeshStandardMaterial({color:0x77bbff}));head.position.y=1.7;body.userData.remotePlayer=true; head.userData.remotePlayer=true; body.userData.playerId=playerId; head.userData.playerId=playerId; r.add(body,head);scene.add(r);remotePlayers.set(playerId,r);}
   // A network state contains the camera eye height; the avatar root must remain on the ground.
