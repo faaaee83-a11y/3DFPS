@@ -318,6 +318,7 @@
 <div id="start-screen">
   <div>
     <h1>SHOOTING RANGE</h1>
+    <div class="sub" id="start-instructions"></div><div id="team-objective" style="color:#ffcf4d;font-size:12px;margin:-10px auto 12px;max-width:560px"></div><div id="map-select-wrap">MAP <select id="map-select"><option value="range">TRAINING RANGE</option><option value="close">CLOSE QUARTERS</option><option value="long">LONG DISTANCE</option><option value="warehouse">WAREHOUSE</option><option value="urban">URBAN BLOCK</option><option value="forest">FOREST OUTPOST</option><option value="desert">DESERT CHECKPOINT</option><option value="night">NIGHT RAID</option><option value="shipyard">SHIPYARD</option><option value="bunker">BUNKER</option><option value="metro">METRO RUSH</option><option value="rooftop">ROOFTOP DUEL</option><option value="village">VILLAGE SIEGE</option><option value="ice">ICE STATION</option><option value="volcano">VOLCANIC FORGE</option><option value="harbor">HARBOR LINE</option><option value="ruins">JUNGLE RUINS</option><option value="canyon">CANYON CROSSING</option><option value="lab">RESEARCH LAB</option><option value="terminal">AIR TERMINAL</option><option value="stadium">STADIUM</option><option value="oil">OIL PLATFORM</option></select><label style="margin-left:12px">MODE <select id="team-mode"><option value="duel">P2P DUEL（先に15キル）</option><option value="elimination">P2P ELIMINATION（残機3）</option><option value="attack">BOT ATTACK 攻撃</option><option value="defend">BOT DEFEND 守り</option></select></label></div>
     <div class="sub" id="start-instructions"></div><div id="team-objective" style="color:#ffcf4d;font-size:12px;margin:-10px auto 12px;max-width:560px"></div><div id="map-select-wrap">MAP <select id="map-select"><option value="range">TRAINING RANGE</option><option value="close">CLOSE QUARTERS</option><option value="long">LONG DISTANCE</option><option value="warehouse">WAREHOUSE</option><option value="urban">URBAN BLOCK</option><option value="forest">FOREST OUTPOST</option><option value="desert">DESERT CHECKPOINT</option><option value="night">NIGHT RAID</option><option value="shipyard">SHIPYARD</option><option value="bunker">BUNKER</option></select><label style="margin-left:12px">MODE <select id="team-mode"><option value="attack">ATTACK 攻撃</option><option value="defend">DEFEND 守り</option></select></label></div>
     <div class="btn" id="start-btn">射撃場</div><div class="btn" id="bot-btn">BOT ARENA</div><div class="btn" id="net-open">P2P MATCH</div>
   </div>
@@ -620,10 +621,22 @@ const MAP_PRESETS={
   shipyard:{cameraZ:9, targets:[[-4,1.7,-7],[4,1.7,-7],[-7,1.8,-15],[0,1.8,-15],[7,1.8,-15],[-5,2,-26],[2,2,-26],[7,2,-36],[-7,2.1,-48],[0,2.1,-60],[7,2.2,-72]], bots:[[-8,-20],[0,-38],[8,-58]]},
   bunker:{cameraZ:6, targets:[[-2,1.5,-4],[2,1.5,-4],[-5,1.6,-9],[0,1.6,-9],[5,1.6,-9],[-4,1.8,-15],[4,1.8,-15],[-5,1.9,-23],[0,1.9,-23],[5,1.9,-23],[0,2,-32]], bots:[[-5,-10],[0,-18],[5,-26]]}
 };
+// Online maps share the same combat-ready target/bot layout format, so each map can
+// have its own spawn distance and sight lines without adding a separate code path.
+function combatPreset(cameraZ, spread, depth){
+  const targets=[[-spread,1.6,-7],[spread,1.6,-7],[-spread*1.5,1.75,-depth*.25],[0,1.8,-depth*.25],[spread*1.5,1.75,-depth*.25],[-spread,1.9,-depth*.52],[spread,1.9,-depth*.52],[-spread*1.5,2,-depth*.75],[0,2.1,-depth*.75],[spread*1.5,2,-depth*.75],[0,2.2,-depth]];
+  return {cameraZ,targets,bots:[[-spread,-depth*.3],[0,-depth*.57],[spread,-depth*.84]]};
+}
+Object.assign(MAP_PRESETS,{
+  metro:combatPreset(7,4,44), rooftop:combatPreset(10,7,66), village:combatPreset(9,6,58),
+  ice:combatPreset(11,8,82), volcano:combatPreset(8,5,52), harbor:combatPreset(10,7,72),
+  ruins:combatPreset(8,6,56), canyon:combatPreset(12,9,96), lab:combatPreset(7,4,40),
+  terminal:combatPreset(10,7,70), stadium:combatPreset(11,8,86), oil:combatPreset(9,6,64)
+});
 function applyMap(mapId){
   const preset=MAP_PRESETS[mapId]||MAP_PRESETS.range; camera.position.z=preset.cameraZ;
   rebuildMapDecor(mapId);
-  const mapColors={close:0x3e4652,long:0x7895aa,night:0x101a2d,bunker:0x25282b,desert:0xc69b66,forest:0x52705b,warehouse:0x59636a,urban:0x69727b,shipyard:0x526878};
+  const mapColors={close:0x3e4652,long:0x7895aa,night:0x101a2d,bunker:0x25282b,desert:0xc69b66,forest:0x52705b,warehouse:0x59636a,urban:0x69727b,shipyard:0x526878,metro:0x303438,rooftop:0x526b86,village:0x75815b,ice:0x9cc9d9,volcano:0x56362d,harbor:0x3c6974,ruins:0x53724f,canyon:0xa87047,lab:0x5a7380,terminal:0x778690,stadium:0x426b58,oil:0x303d49};
   const mapColor=mapColors[mapId]||0x8fb8d8;
   scene.background.set(mapColor);
   scene.fog.color.set(mapColor);
@@ -1175,7 +1188,7 @@ function spawnBullet(originWorld, dirWorld, weapon){
 }
 
 const raycaster = new THREE.Raycaster();
-const targetMeshes = () => targets.map(t=>t.mesh).concat(botMeshes(), [lane, ground]);
+const targetMeshes = () => targets.map(t=>t.mesh).concat(botMeshes(), [...remotePlayers.values()].flatMap(player=>player.children), [lane, ground]);
 
 function castSegmentStrict(prevPos, newPos){
   // 移動ターゲット・ボットを動かした直後でも最新のヒットボックスを使う。
@@ -1220,6 +1233,7 @@ function updateBullets(dt){
     if(hit){
       const bot = hit.object.userData.botRef;
       if(bot) registerBotHit(bot, hit.point, hit.object.userData.isHead);
+      else if(hit.object.userData.remotePlayer){ const damage=hit.object.userData.isHead?100:30; netSend({type:'hit',damage}); state.hits++; state.score+=damage; updateAccuracy(); showHitMarker(); document.getElementById('score-display').textContent=`SCORE ${state.score}`; }
       else if(hit.object===lane || hit.object===ground) { drawFloorHole(hit.point, hit.face?.normal); }
       else {
         const t = targets.find(tt => tt.mesh === hit.object);
@@ -1266,7 +1280,7 @@ const state = window.state = {
   locked: false,
   gameActive: false,
   kick: {pos:0, rot:0}, weaponRecoilPitch: 0,
-  shakeTime: 0, botMode:false, teamMode:'attack', playerHP:100, grenades:2, bombs:1
+  shakeTime: 0, botMode:false, onlineMatch:false, teamMode:'duel', playerHP:100, lives:3, kills:0, grenades:2, bombs:1
 };
 
 let currentFOV = settings.fov;
@@ -1331,6 +1345,8 @@ function closePeer(){
 function receiveNetMessage(message){
   if(!message || typeof message!=='object') return;
   if(message.type==='state') netRemoteState(message);
+  else if(message.type==='match-config'){ mapSelect.value=message.map; teamMode.value=message.mode; applyMap(message.map); }
+  else if(message.type==='hit') damagePlayer(message.damage||25);
   else if(message.type==='shot') remoteShot(message);
   else if(message.type==='event') remoteEvent(message);
 }
@@ -1340,6 +1356,7 @@ function attachConnection(connection){
   connection.on('data',receiveNetMessage);
   connection.on('open',()=>{
     net.connected=true;
+    if(net.role==='host') netSend({type:'match-config',map:mapSelect.value,mode:teamMode.value});
     netSetStatus('マッチ成立 — P2P 接続中');
     netPanel.classList.remove('show');
     startGame(false);
@@ -1388,11 +1405,17 @@ document.getElementById('match-join').addEventListener('click',joinMatch);
 document.getElementById('match-quick').addEventListener('click',quickMatch);
 document.getElementById('match-leave').addEventListener('click',leaveMatch);
 function netRemoteState(m){
-  let r=remotePlayers.get('peer'); if(!r){r=new THREE.Group(); const body=new THREE.Mesh(new THREE.BoxGeometry(.42,1.1,.3),new THREE.MeshStandardMaterial({color:0x3f8cff}));body.position.y=1; const head=new THREE.Mesh(new THREE.SphereGeometry(.2,10,8),new THREE.MeshStandardMaterial({color:0x77bbff}));head.position.y=1.7;r.add(body,head);scene.add(r);remotePlayers.set('peer',r);}
+  let r=remotePlayers.get('peer'); if(!r){r=new THREE.Group(); const body=new THREE.Mesh(new THREE.BoxGeometry(.42,1.1,.3),new THREE.MeshStandardMaterial({color:0x3f8cff}));body.position.y=1; const head=new THREE.Mesh(new THREE.SphereGeometry(.2,10,8),new THREE.MeshStandardMaterial({color:0x77bbff}));head.position.y=1.7;body.userData.remotePlayer=true; head.userData.remotePlayer=true; r.add(body,head);scene.add(r);remotePlayers.set('peer',r);}
   r.position.lerp(new THREE.Vector3(m.x,m.y,m.z),.35); r.rotation.y=m.yaw;
 }
 function remoteShot(m){flashLight.intensity=2; flashSprite.material.opacity=.7;}
-function remoteEvent(m){if(m.name==='grenade'){} if(m.name==='bomb'){} if(m.name==='drone'){}}
+function remoteEvent(m){
+  if(m.name==='eliminated'){
+    state.kills++; state.score+=100; document.getElementById('score-display').textContent=`KILLS ${state.kills}`;
+    if(state.teamMode==='duel' && state.kills>=15){ state.gameActive=false; teamObjective.textContent='VICTORY — 15 KILLS'; startScreen.classList.remove('hide'); }
+  }
+  if(m.name==='grenade'){} if(m.name==='bomb'){} if(m.name==='drone'){}
+}
 
 // =========================================================================
 // 入力(PC: キーボード + マウス)
@@ -1443,12 +1466,12 @@ document.getElementById('start-instructions').textContent = useTouchUI
 function startGame(botMode){
   state.teamMode = teamMode.value;
   applyMap(mapSelect.value);
-  state.botMode=botMode; state.playerHP=100; state.reloading=false; state.reload=null; document.getElementById('reload-stage').classList.remove('show'); resetBots();
+  state.onlineMatch=net.connected; state.botMode=botMode; state.playerHP=100; state.lives=3; state.reloading=false; state.reload=null; document.getElementById('reload-stage').classList.remove('show'); resetBots();
   document.querySelector('#player-health > div').style.width='100%';
-  document.getElementById('player-health').classList.toggle('show',botMode);
-  document.getElementById('bot-hud').classList.toggle('show',botMode);
-  teamObjective.textContent = botMode ? (state.teamMode==='attack' ? 'ATTACK: BOT拠点を制圧 — 敵をすべて排除' : 'DEFEND: 拠点を守れ — BOTの攻撃を耐え抜け') : 'FREE RANGE: 武器とマップを選んで練習';
-  document.getElementById('bot-hud').textContent = botMode ? (state.teamMode==='attack' ? 'ATTACK TEAM' : 'DEFENSE TEAM') : 'BOT ARENA';
+  document.getElementById('player-health').classList.toggle('show',botMode || state.onlineMatch);
+  document.getElementById('bot-hud').classList.toggle('show',botMode || state.onlineMatch);
+  teamObjective.textContent = state.onlineMatch ? (state.teamMode==='elimination' ? 'P2P ELIMINATION: 残機3、最後まで生き残れ' : 'P2P DUEL: 先に15キルで勝利') : (botMode ? (state.teamMode==='attack' ? 'ATTACK: BOT拠点を制圧 — 敵をすべて排除' : 'DEFEND: 拠点を守れ — BOTの攻撃を耐え抜け') : 'FREE RANGE: 武器とマップを選んで練習');
+  document.getElementById('bot-hud').textContent = state.onlineMatch ? 'P2P COMBAT' : (botMode ? (state.teamMode==='attack' ? 'ATTACK TEAM' : 'DEFENSE TEAM') : 'BOT ARENA');
   startScreen.classList.add('hide');
   state.gameActive = true;
   if(state.startTime===0) state.startTime = performance.now();
@@ -1748,11 +1771,22 @@ function showCombatText(text, worldPoint){
   requestAnimationFrame(()=>{el.style.transform='translateY(-55px) scale(1.2)';el.style.opacity='0';}); setTimeout(()=>el.remove(),700);
 }
 function damagePlayer(amount){
-  if(!state.botMode) return;
+  if(!state.botMode && !state.onlineMatch) return;
   state.playerHP=Math.max(0,state.playerHP-amount);
   document.querySelector('#player-health > div').style.width=state.playerHP+'%';
   const flash=document.getElementById('damage-flash'); flash.style.opacity='1'; setTimeout(()=>flash.style.opacity='0',90);
-  if(state.playerHP===0){ state.gameActive=false; startScreen.classList.remove('hide'); document.getElementById('start-instructions').textContent='撃破されました。BOT ARENAで再挑戦してください。'; }
+  if(state.playerHP===0){
+    if(state.onlineMatch){
+      state.lives--; netSend({type:'event',name:'eliminated'});
+      if(state.teamMode==='elimination' && state.lives<=0){ state.gameActive=false; startScreen.classList.remove('hide'); document.getElementById('start-instructions').textContent='ELIMINATED — 新しい P2P マッチを開始してください。'; }
+      else { netSetStatus(`被弾 — ${state.teamMode==='elimination'?'残機 '+state.lives:'3秒後にリスポーン'}`); setTimeout(respawnOnline,3000); }
+    } else { state.gameActive=false; startScreen.classList.remove('hide'); document.getElementById('start-instructions').textContent='撃破されました。BOT ARENAで再挑戦してください。'; }
+  }
+}
+function respawnOnline(){
+  if(!state.onlineMatch || !net.connected || !state.gameActive) return;
+  state.playerHP=100; camera.position.set(0,1.7,(MAP_PRESETS[mapSelect.value]||MAP_PRESETS.range).cameraZ);
+  document.querySelector('#player-health > div').style.width='100%'; netSetStatus('P2P MATCH — リスポーン完了');
 }
 function updateBots(dt){
   if(!state.botMode || !state.gameActive) return;
