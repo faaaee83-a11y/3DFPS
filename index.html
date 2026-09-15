@@ -1418,7 +1418,8 @@ document.getElementById('match-quick').addEventListener('click',quickMatch);
 document.getElementById('match-leave').addEventListener('click',leaveMatch);
 function netRemoteState(m){
   const playerId=m.from||'peer'; let r=remotePlayers.get(playerId); if(!r){r=new THREE.Group(); const body=new THREE.Mesh(new THREE.BoxGeometry(.42,1.1,.3),new THREE.MeshStandardMaterial({color:m.team==='red'?0xd34848:0x3f8cff}));body.position.y=1; const head=new THREE.Mesh(new THREE.SphereGeometry(.2,10,8),new THREE.MeshStandardMaterial({color:0x77bbff}));head.position.y=1.7;body.userData.remotePlayer=true; head.userData.remotePlayer=true; body.userData.playerId=playerId; head.userData.playerId=playerId; r.add(body,head);scene.add(r);remotePlayers.set(playerId,r);}
-  r.position.lerp(new THREE.Vector3(m.x,m.y,m.z),.35); r.rotation.y=m.yaw;
+  // A network state contains the camera eye height; the avatar root must remain on the ground.
+  r.position.lerp(new THREE.Vector3(m.x,0,m.z),.35); r.rotation.y=m.yaw;
 }
 function remoteShot(m){flashLight.intensity=2; flashSprite.material.opacity=.7;}
 function remoteEvent(m){
@@ -1483,7 +1484,7 @@ document.getElementById('start-instructions').textContent = useTouchUI
 function startGame(botMode){
   state.teamMode = teamMode.value;
   applyMap(mapSelect.value);
-  state.onlineMatch=net.connected; state.botMode=botMode; state.playerHP=100; state.lives=3; state.reloading=false; state.reload=null; document.getElementById('reload-stage').classList.remove('show'); resetBots();
+  state.onlineMatch=net.connected; state.botMode=botMode; if(state.onlineMatch) setOnlineSpawn(); state.playerHP=100; state.lives=3; state.reloading=false; state.reload=null; document.getElementById('reload-stage').classList.remove('show'); resetBots();
   document.querySelector('#player-health > div').style.width='100%';
   document.getElementById('player-health').classList.toggle('show',botMode || state.onlineMatch);
   document.getElementById('bot-hud').classList.toggle('show',botMode || state.onlineMatch); chatPanel.classList.toggle('show',state.onlineMatch);
@@ -1800,9 +1801,18 @@ function damagePlayer(amount,killerId=null){
     } else { state.gameActive=false; startScreen.classList.remove('hide'); document.getElementById('start-instructions').textContent='撃破されました。BOT ARENAで再挑戦してください。'; }
   }
 }
+function setOnlineSpawn(){
+  const preset=MAP_PRESETS[mapSelect.value]||MAP_PRESETS.range;
+  const red=net.team==='red';
+  // Teams start at opposite ends and face toward the center of the battlefield.
+  const lane=((parseInt(net.clientId.slice(-2),36)||0)%3-1)*2.4;
+  camera.position.set(lane,1.7,red?preset.cameraZ:-preset.cameraZ);
+  state.viewYaw=red?0:Math.PI; state.viewPitch=0;
+  clampToRange();
+}
 function respawnOnline(){
   if(!state.onlineMatch || !net.connected || !state.gameActive) return;
-  state.playerHP=100; state.spectatingId=null; camera.position.set(0,1.7,(MAP_PRESETS[mapSelect.value]||MAP_PRESETS.range).cameraZ);
+  state.playerHP=100; state.spectatingId=null; setOnlineSpawn();
   document.querySelector('#player-health > div').style.width='100%'; netSetStatus('P2P MATCH — リスポーン完了');
 }
 function updateBots(dt){
@@ -2107,8 +2117,9 @@ function updateMovementTouch(dt){
   const forward = new THREE.Vector3(Math.sin(state.viewYaw), 0, -Math.cos(state.viewYaw));
   const right = new THREE.Vector3(Math.cos(state.viewYaw), 0, Math.sin(state.viewYaw));
   const move = new THREE.Vector3();
-  move.addScaledVector(forward, -joyVec.y);
-  move.addScaledVector(right, joyVec.x);
+  // The touch pad is intentionally mirrored so its on-screen direction matches movement.
+  move.addScaledVector(forward, joyVec.y);
+  move.addScaledVector(right, -joyVec.x);
   if(move.lengthSq()>0.0001) move.normalize().multiplyScalar(speed*dt);
   moveVel.lerp(move, 0.35);
   camera.position.add(moveVel);
