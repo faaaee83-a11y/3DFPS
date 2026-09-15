@@ -216,7 +216,7 @@
 <div id="damage-flash"></div>
 <div id="reload-stage"></div>
 <div id="equipment-display">G 手榴弾 2　B 爆弾 1　V ドローン</div>
-<div id="net-panel"><div class="net-inner"><h2>P2P TEAM MATCH</h2><p>ルームコードでホストと直接接続します。ホストは人数上限を決め、RED／BLUE チームで対戦できます。</p><div id="net-status" role="status">未接続</div><div class="net-row"><input id="match-room" class="net-area" style="min-height:42px;flex:1" maxlength="8" autocomplete="off" placeholder="ルームコード"><button class="net-btn" id="match-quick">クイック開始</button></div><div class="net-row"><label>TEAM <select id="match-team"><option value="red">RED</option><option value="blue">BLUE</option></select></label><label>MAX <select id="match-max"><option value="2">2人</option><option value="4" selected>4人</option><option value="6">6人</option><option value="8">8人</option></select></label></div><div class="net-row"><button class="net-btn" id="match-create">ルーム作成</button><button class="net-btn" id="match-join">ルーム参加</button><button class="net-btn" id="match-leave">退出</button></div><p id="match-room-label" style="color:#ffe15a;font-size:14px"></p><p style="font-size:11px;opacity:.65">倒された後はキラー視点で観戦し、3秒後にリスポーンします。チャットは Enter キーでも開けます。</p><div class="net-row"><button class="net-btn" id="net-close">閉じる</button></div></div></div>
+<div id="net-panel"><div class="net-inner"><h2>P2P TEAM MATCH</h2><p>ルームコードでホストと直接接続します。ホストは人数上限を決め、RED／BLUE チームで対戦できます。</p><div id="net-status" role="status">未接続</div><div class="net-row"><input id="match-room" class="net-area" style="min-height:42px;flex:1" maxlength="8" autocomplete="off" placeholder="ルームコード"><button class="net-btn" id="match-quick">クイック開始</button></div><div class="net-row"><label>FORMAT <select id="match-max"><option value="2">1 vs 1</option><option value="4" selected>2 vs 2</option><option value="6">3 vs 3</option><option value="8">4 vs 4</option></select></label></div><div class="net-row"><button class="net-btn" id="match-create">ルーム作成</button><button class="net-btn" id="match-join">ルーム参加</button><button class="net-btn" id="match-leave">退出</button></div><p id="match-room-label" style="color:#ffe15a;font-size:14px"></p><p style="font-size:11px;opacity:.65">RED / BLUE はホストが自動で均等に振り分けます。倒された後はキラー視点で観戦し、3秒後にリスポーンします。チャットは Enter キーでも開けます。</p><div class="net-row"><button class="net-btn" id="net-close">閉じる</button></div></div></div>
 <div id="player-health"><div></div></div>
 <div id="chat-panel" aria-label="match chat"><div id="chat-log"></div><form id="chat-form"><input id="chat-input" maxlength="140" autocomplete="off" placeholder="Enterでチャット"><button id="chat-send" type="submit">送信</button></form></div>
 <div id="screen-shake-layer"></div>
@@ -324,7 +324,6 @@
   <div>
     <h1>SHOOTING RANGE</h1>
     <div class="sub" id="start-instructions"></div><div id="team-objective" style="color:#ffcf4d;font-size:12px;margin:-10px auto 12px;max-width:560px"></div><div id="map-select-wrap">MAP <select id="map-select"><option value="range">TRAINING RANGE</option><option value="close">CLOSE QUARTERS</option><option value="long">LONG DISTANCE</option><option value="warehouse">WAREHOUSE</option><option value="urban">URBAN BLOCK</option><option value="forest">FOREST OUTPOST</option><option value="desert">DESERT CHECKPOINT</option><option value="night">NIGHT RAID</option><option value="shipyard">SHIPYARD</option><option value="bunker">BUNKER</option><option value="metro">METRO RUSH</option><option value="rooftop">ROOFTOP DUEL</option><option value="village">VILLAGE SIEGE</option><option value="ice">ICE STATION</option><option value="volcano">VOLCANIC FORGE</option><option value="harbor">HARBOR LINE</option><option value="ruins">JUNGLE RUINS</option><option value="canyon">CANYON CROSSING</option><option value="lab">RESEARCH LAB</option><option value="terminal">AIR TERMINAL</option><option value="stadium">STADIUM</option><option value="oil">OIL PLATFORM</option></select><label style="margin-left:12px">MODE <select id="team-mode"><option value="duel">P2P DUEL（先に15キル）</option><option value="elimination">P2P ELIMINATION（残機3）</option><option value="attack">BOT ATTACK 攻撃</option><option value="defend">BOT DEFEND 守り</option></select></label></div>
-    <div class="sub" id="start-instructions"></div><div id="team-objective" style="color:#ffcf4d;font-size:12px;margin:-10px auto 12px;max-width:560px"></div><div id="map-select-wrap">MAP <select id="map-select"><option value="range">TRAINING RANGE</option><option value="close">CLOSE QUARTERS</option><option value="long">LONG DISTANCE</option><option value="warehouse">WAREHOUSE</option><option value="urban">URBAN BLOCK</option><option value="forest">FOREST OUTPOST</option><option value="desert">DESERT CHECKPOINT</option><option value="night">NIGHT RAID</option><option value="shipyard">SHIPYARD</option><option value="bunker">BUNKER</option></select><label style="margin-left:12px">MODE <select id="team-mode"><option value="attack">ATTACK 攻撃</option><option value="defend">DEFEND 守り</option></select></label></div>
     <div class="btn" id="start-btn">射撃場</div><div class="btn" id="bot-btn">BOT ARENA</div><div class="btn" id="net-open">P2P MATCH</div>
   </div>
 </div>
@@ -1332,7 +1331,6 @@ const netPanel=document.getElementById('net-panel');
 const netStatus=document.getElementById('net-status');
 const matchRoom=document.getElementById('match-room');
 const matchRoomLabel=document.getElementById('match-room-label');
-const matchTeam=document.getElementById('match-team');
 const matchMax=document.getElementById('match-max');
 const chatPanel=document.getElementById('chat-panel'); const chatLog=document.getElementById('chat-log'); const chatForm=document.getElementById('chat-form'); const chatInput=document.getElementById('chat-input');
 const PEER_PREFIX='3dfps-room-';
@@ -1356,20 +1354,21 @@ function closePeer(){
 function receiveNetMessage(message){
   if(!message || typeof message!=='object') return;
   if(message.type==='state') netRemoteState(message);
-  else if(message.type==='match-config'){ mapSelect.value=message.map; teamMode.value=message.mode; applyMap(message.map); }
-  else if(message.type==='hit') damagePlayer(message.damage||25,message.from);
+  else if(message.type==='match-config'){ net.team=message.assignedTeam||net.team; mapSelect.value=message.map; teamMode.value=message.mode; applyMap(message.map); netSetStatus(`マッチ成立 — ${net.team.toUpperCase()} TEAM`); }
+  else if(message.type==='hit' && message.team!==net.team) damagePlayer(message.damage||25,message.from);
   else if(message.type==='chat') addChatMessage(message.text,message.team);
   else if(message.type==='shot') remoteShot(message);
   else if(message.type==='event') remoteEvent(message);
 }
 function attachConnection(connection){
   if(net.role==='host' && net.connections.size>=net.maxPlayers-1){ connection.close(); netSetStatus('ルームは満員です'); return; }
+  if(net.role==='host') connection.assignedTeam=net.connections.size%2===0?'blue':'red';
   if(net.role!=='host' && net.dc && net.dc!==connection) net.dc.close();
   net.dc=connection; net.connections.set(connection.peer,connection); net.players=net.connections.size;
   connection.on('data',message=>{ receiveNetMessage(message); relayMessage(message,connection); });
   connection.on('open',()=>{
     net.connected=true;
-    if(net.role==='host') netSend({type:'match-config',map:mapSelect.value,mode:teamMode.value,maxPlayers:net.maxPlayers});
+    if(net.role==='host') connection.send({type:'match-config',map:mapSelect.value,mode:teamMode.value,maxPlayers:net.maxPlayers,assignedTeam:connection.assignedTeam});
     netSetStatus('マッチ成立 — P2P 接続中');
     netPanel.classList.remove('show');
     startGame(false);
@@ -1381,7 +1380,7 @@ function attachConnection(connection){
 }
 function createMatch(){
   closePeer();
-  net.room=makeRoomCode(); net.role='host'; net.team=matchTeam.value; net.maxPlayers=Number(matchMax.value); net.players=0;
+  net.room=makeRoomCode(); net.role='host'; net.team='red'; net.maxPlayers=Number(matchMax.value); net.players=0;
   matchRoom.value=net.room; matchRoomLabel.textContent='ROOM: '+net.room+'（相手に共有）';
   netSetStatus('ルームを公開中… 相手の参加を待っています');
   peer=new Peer(PEER_PREFIX+net.room);
@@ -1395,7 +1394,7 @@ function createMatch(){
 function joinMatch(){
   const room=cleanRoomCode(matchRoom.value);
   if(!room){netSetStatus('ルームコードを入力してください');return;}
-  closePeer(); net.room=room; net.role='guest'; net.team=matchTeam.value;
+  closePeer(); net.room=room; net.role='guest'; net.team='unassigned';
   matchRoom.value=room; matchRoomLabel.textContent='ROOM: '+room;
   netSetStatus('ホストへ接続中…');
   peer=new Peer();
