@@ -160,6 +160,10 @@
   .net-btn { padding:9px 14px; border:1px solid #7fffa0; background:#18241e; color:#dfe; border-radius:4px; cursor:pointer; }
   .net-area { width:100%; min-height:100px; background:#11181a; color:#dfe; border:1px solid #58665e; padding:8px; font:11px Consolas,monospace; user-select:text; }
   #net-status { color:#ffe15a; font-size:12px; margin:12px 0; }
+  #chat-panel { position:fixed; left:14px; bottom:145px; z-index:260; width:min(330px,calc(100vw - 28px)); color:#eafff1; text-shadow:0 1px 2px #000; pointer-events:auto; display:none; }
+  #chat-panel.show { display:block; }
+  #chat-log { max-height:118px; overflow:auto; padding:6px; background:rgba(0,0,0,.38); font-size:11px; line-height:1.45; }
+  #chat-form { display:flex; margin-top:4px; gap:4px; } #chat-input { flex:1; min-width:0; padding:6px; color:#fff; background:rgba(0,0,0,.65); border:1px solid #7fffa0; font:12px Consolas,monospace; user-select:text; } #chat-send { padding:5px 9px; border:1px solid #7fffa0; background:#18241e; color:#dfe; cursor:pointer; }
   .tactical-btn { display:none; }
   #bot-hud { position:absolute; left:50%; top:48px; transform:translateX(-50%); color:#ff7777; font-size:12px; opacity:0; pointer-events:none; }
   #bot-hud.show { opacity:.9; }
@@ -212,8 +216,9 @@
 <div id="damage-flash"></div>
 <div id="reload-stage"></div>
 <div id="equipment-display">G 手榴弾 2　B 爆弾 1　V ドローン</div>
-<div id="net-panel"><div class="net-inner"><h2>P2P MATCH</h2><p>ルームコードでホストと直接接続します。ゲーム中の位置・射撃情報は WebRTC データチャネルでプレイヤー間を直接送信します。</p><div id="net-status" role="status">未接続</div><div class="net-row"><input id="match-room" class="net-area" style="min-height:42px;flex:1" maxlength="8" autocomplete="off" placeholder="ルームコード"><button class="net-btn" id="match-quick">クイック開始</button></div><div class="net-row"><button class="net-btn" id="match-create">ルーム作成</button><button class="net-btn" id="match-join">ルーム参加</button><button class="net-btn" id="match-leave">退出</button></div><p id="match-room-label" style="color:#ffe15a;font-size:14px"></p><p style="font-size:11px;opacity:.65">ルーム作成後、表示されたコードを相手に共有してください。接続の仲介には PeerJS のシグナリングを使い、プレイデータは P2P 接続です。</p><div class="net-row"><button class="net-btn" id="net-close">閉じる</button></div></div></div>
+<div id="net-panel"><div class="net-inner"><h2>P2P TEAM MATCH</h2><p>ルームコードでホストと直接接続します。ホストは人数上限を決め、RED／BLUE チームで対戦できます。</p><div id="net-status" role="status">未接続</div><div class="net-row"><input id="match-room" class="net-area" style="min-height:42px;flex:1" maxlength="8" autocomplete="off" placeholder="ルームコード"><button class="net-btn" id="match-quick">クイック開始</button></div><div class="net-row"><label>TEAM <select id="match-team"><option value="red">RED</option><option value="blue">BLUE</option></select></label><label>MAX <select id="match-max"><option value="2">2人</option><option value="4" selected>4人</option><option value="6">6人</option><option value="8">8人</option></select></label></div><div class="net-row"><button class="net-btn" id="match-create">ルーム作成</button><button class="net-btn" id="match-join">ルーム参加</button><button class="net-btn" id="match-leave">退出</button></div><p id="match-room-label" style="color:#ffe15a;font-size:14px"></p><p style="font-size:11px;opacity:.65">倒された後はキラー視点で観戦し、3秒後にリスポーンします。チャットは Enter キーでも開けます。</p><div class="net-row"><button class="net-btn" id="net-close">閉じる</button></div></div></div>
 <div id="player-health"><div></div></div>
+<div id="chat-panel" aria-label="match chat"><div id="chat-log"></div><form id="chat-form"><input id="chat-input" maxlength="140" autocomplete="off" placeholder="Enterでチャット"><button id="chat-send" type="submit">送信</button></form></div>
 <div id="screen-shake-layer"></div>
 
 <div id="hud">
@@ -1280,7 +1285,7 @@ const state = window.state = {
   locked: false,
   gameActive: false,
   kick: {pos:0, rot:0}, weaponRecoilPitch: 0,
-  shakeTime: 0, botMode:false, onlineMatch:false, teamMode:'duel', playerHP:100, lives:3, kills:0, grenades:2, bombs:1
+  shakeTime: 0, botMode:false, onlineMatch:false, teamMode:'duel', playerHP:100, lives:3, kills:0, spectatingId:null, grenades:2, bombs:1
 };
 
 let currentFOV = settings.fov;
@@ -1327,17 +1332,23 @@ const netPanel=document.getElementById('net-panel');
 const netStatus=document.getElementById('net-status');
 const matchRoom=document.getElementById('match-room');
 const matchRoomLabel=document.getElementById('match-room-label');
+const matchTeam=document.getElementById('match-team');
+const matchMax=document.getElementById('match-max');
+const chatPanel=document.getElementById('chat-panel'); const chatLog=document.getElementById('chat-log'); const chatForm=document.getElementById('chat-form'); const chatInput=document.getElementById('chat-input');
 const PEER_PREFIX='3dfps-room-';
 let peer=null;
+net.clientId=Math.random().toString(36).slice(2,10); net.maxPlayers=4; net.team='red'; net.connections=new Map();
 function netSetStatus(t){netStatus.textContent=t;}
 function makeRoomCode(){return Math.random().toString(36).slice(2,8).toUpperCase();}
 function cleanRoomCode(value){return value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);}
 function netSend(message){
-  if(net.dc && net.dc.open){
-    try{net.dc.send(message);}catch(error){console.warn('P2P send failed',error);}
-  }
+  const payload={...message,from:net.clientId,team:net.team};
+  const send=connection=>{if(connection?.open)try{connection.send(payload);}catch(error){console.warn('P2P send failed',error);}};
+  if(net.role==='host') net.connections.forEach(send); else send(net.dc);
 }
+function relayMessage(message,except){ if(net.role==='host') net.connections.forEach(connection=>{if(connection!==except && connection.open) connection.send(message);}); }
 function closePeer(){
+  net.connections.forEach(connection=>connection.close()); net.connections.clear();
   if(net.dc){net.dc.close(); net.dc=null;}
   if(peer){peer.destroy(); peer=null;}
   net.connected=false; net.role=null;
@@ -1346,29 +1357,31 @@ function receiveNetMessage(message){
   if(!message || typeof message!=='object') return;
   if(message.type==='state') netRemoteState(message);
   else if(message.type==='match-config'){ mapSelect.value=message.map; teamMode.value=message.mode; applyMap(message.map); }
-  else if(message.type==='hit') damagePlayer(message.damage||25);
+  else if(message.type==='hit') damagePlayer(message.damage||25,message.from);
+  else if(message.type==='chat') addChatMessage(message.text,message.team);
   else if(message.type==='shot') remoteShot(message);
   else if(message.type==='event') remoteEvent(message);
 }
 function attachConnection(connection){
-  if(net.dc && net.dc!==connection) net.dc.close();
-  net.dc=connection;
-  connection.on('data',receiveNetMessage);
+  if(net.role==='host' && net.connections.size>=net.maxPlayers-1){ connection.close(); netSetStatus('ルームは満員です'); return; }
+  if(net.role!=='host' && net.dc && net.dc!==connection) net.dc.close();
+  net.dc=connection; net.connections.set(connection.peer,connection); net.players=net.connections.size;
+  connection.on('data',message=>{ receiveNetMessage(message); relayMessage(message,connection); });
   connection.on('open',()=>{
     net.connected=true;
-    if(net.role==='host') netSend({type:'match-config',map:mapSelect.value,mode:teamMode.value});
+    if(net.role==='host') netSend({type:'match-config',map:mapSelect.value,mode:teamMode.value,maxPlayers:net.maxPlayers});
     netSetStatus('マッチ成立 — P2P 接続中');
     netPanel.classList.remove('show');
     startGame(false);
   });
   connection.on('close',()=>{
-    if(net.dc===connection){net.connected=false; netSetStatus('相手が退出しました');}
+    net.connections.delete(connection.peer); net.players=net.connections.size; if(net.role!=='host' || net.connections.size===0){net.connected=false; netSetStatus('相手が退出しました');}
   });
   connection.on('error',()=>netSetStatus('P2P 接続エラー。もう一度お試しください。'));
 }
 function createMatch(){
   closePeer();
-  net.room=makeRoomCode(); net.role='host';
+  net.room=makeRoomCode(); net.role='host'; net.team=matchTeam.value; net.maxPlayers=Number(matchMax.value); net.players=0;
   matchRoom.value=net.room; matchRoomLabel.textContent='ROOM: '+net.room+'（相手に共有）';
   netSetStatus('ルームを公開中… 相手の参加を待っています');
   peer=new Peer(PEER_PREFIX+net.room);
@@ -1382,7 +1395,7 @@ function createMatch(){
 function joinMatch(){
   const room=cleanRoomCode(matchRoom.value);
   if(!room){netSetStatus('ルームコードを入力してください');return;}
-  closePeer(); net.room=room; net.role='guest';
+  closePeer(); net.room=room; net.role='guest'; net.team=matchTeam.value;
   matchRoom.value=room; matchRoomLabel.textContent='ROOM: '+room;
   netSetStatus('ホストへ接続中…');
   peer=new Peer();
@@ -1405,7 +1418,7 @@ document.getElementById('match-join').addEventListener('click',joinMatch);
 document.getElementById('match-quick').addEventListener('click',quickMatch);
 document.getElementById('match-leave').addEventListener('click',leaveMatch);
 function netRemoteState(m){
-  let r=remotePlayers.get('peer'); if(!r){r=new THREE.Group(); const body=new THREE.Mesh(new THREE.BoxGeometry(.42,1.1,.3),new THREE.MeshStandardMaterial({color:0x3f8cff}));body.position.y=1; const head=new THREE.Mesh(new THREE.SphereGeometry(.2,10,8),new THREE.MeshStandardMaterial({color:0x77bbff}));head.position.y=1.7;body.userData.remotePlayer=true; head.userData.remotePlayer=true; r.add(body,head);scene.add(r);remotePlayers.set('peer',r);}
+  const playerId=m.from||'peer'; let r=remotePlayers.get(playerId); if(!r){r=new THREE.Group(); const body=new THREE.Mesh(new THREE.BoxGeometry(.42,1.1,.3),new THREE.MeshStandardMaterial({color:m.team==='red'?0xd34848:0x3f8cff}));body.position.y=1; const head=new THREE.Mesh(new THREE.SphereGeometry(.2,10,8),new THREE.MeshStandardMaterial({color:0x77bbff}));head.position.y=1.7;body.userData.remotePlayer=true; head.userData.remotePlayer=true; r.add(body,head);scene.add(r);remotePlayers.set(playerId,r);}
   r.position.lerp(new THREE.Vector3(m.x,m.y,m.z),.35); r.rotation.y=m.yaw;
 }
 function remoteShot(m){flashLight.intensity=2; flashSprite.material.opacity=.7;}
@@ -1416,6 +1429,11 @@ function remoteEvent(m){
   }
   if(m.name==='grenade'){} if(m.name==='bomb'){} if(m.name==='drone'){}
 }
+
+function addChatMessage(text,team){ const line=document.createElement('div'); line.textContent=`[${team==='red'?'RED':'BLUE'}] ${String(text).slice(0,140)}`; line.style.color=team==='red'?'#ff9b9b':'#9bc7ff'; chatLog.appendChild(line); chatLog.scrollTop=chatLog.scrollHeight; }
+function sendChat(){ const text=chatInput.value.trim(); if(!text) return; addChatMessage(text,net.team); netSend({type:'chat',text}); chatInput.value=''; chatInput.blur(); }
+chatForm.addEventListener('submit',event=>{event.preventDefault();sendChat();});
+document.addEventListener('keydown',event=>{ if(event.code==='Enter' && state.onlineMatch && document.activeElement!==chatInput){ event.preventDefault(); chatInput.focus(); } });
 
 // =========================================================================
 // 入力(PC: キーボード + マウス)
@@ -1469,7 +1487,7 @@ function startGame(botMode){
   state.onlineMatch=net.connected; state.botMode=botMode; state.playerHP=100; state.lives=3; state.reloading=false; state.reload=null; document.getElementById('reload-stage').classList.remove('show'); resetBots();
   document.querySelector('#player-health > div').style.width='100%';
   document.getElementById('player-health').classList.toggle('show',botMode || state.onlineMatch);
-  document.getElementById('bot-hud').classList.toggle('show',botMode || state.onlineMatch);
+  document.getElementById('bot-hud').classList.toggle('show',botMode || state.onlineMatch); chatPanel.classList.toggle('show',state.onlineMatch);
   teamObjective.textContent = state.onlineMatch ? (state.teamMode==='elimination' ? 'P2P ELIMINATION: 残機3、最後まで生き残れ' : 'P2P DUEL: 先に15キルで勝利') : (botMode ? (state.teamMode==='attack' ? 'ATTACK: BOT拠点を制圧 — 敵をすべて排除' : 'DEFEND: 拠点を守れ — BOTの攻撃を耐え抜け') : 'FREE RANGE: 武器とマップを選んで練習');
   document.getElementById('bot-hud').textContent = state.onlineMatch ? 'P2P COMBAT' : (botMode ? (state.teamMode==='attack' ? 'ATTACK TEAM' : 'DEFENSE TEAM') : 'BOT ARENA');
   startScreen.classList.add('hide');
@@ -1770,14 +1788,14 @@ function showCombatText(text, worldPoint){
   const el=document.createElement('div'); el.id='popup-score'; el.textContent=text; el.style.left=((proj.x*.5+.5)*innerWidth)+'px'; el.style.top=((1-(proj.y*.5+.5))*innerHeight)+'px'; el.style.color='#ff4d4d'; document.body.appendChild(el);
   requestAnimationFrame(()=>{el.style.transform='translateY(-55px) scale(1.2)';el.style.opacity='0';}); setTimeout(()=>el.remove(),700);
 }
-function damagePlayer(amount){
+function damagePlayer(amount,killerId=null){
   if(!state.botMode && !state.onlineMatch) return;
   state.playerHP=Math.max(0,state.playerHP-amount);
   document.querySelector('#player-health > div').style.width=state.playerHP+'%';
   const flash=document.getElementById('damage-flash'); flash.style.opacity='1'; setTimeout(()=>flash.style.opacity='0',90);
   if(state.playerHP===0){
     if(state.onlineMatch){
-      state.lives--; netSend({type:'event',name:'eliminated'});
+      state.lives--; state.spectatingId=killerId; netSend({type:'event',name:'eliminated',killerId});
       if(state.teamMode==='elimination' && state.lives<=0){ state.gameActive=false; startScreen.classList.remove('hide'); document.getElementById('start-instructions').textContent='ELIMINATED — 新しい P2P マッチを開始してください。'; }
       else { netSetStatus(`被弾 — ${state.teamMode==='elimination'?'残機 '+state.lives:'3秒後にリスポーン'}`); setTimeout(respawnOnline,3000); }
     } else { state.gameActive=false; startScreen.classList.remove('hide'); document.getElementById('start-instructions').textContent='撃破されました。BOT ARENAで再挑戦してください。'; }
@@ -1785,7 +1803,7 @@ function damagePlayer(amount){
 }
 function respawnOnline(){
   if(!state.onlineMatch || !net.connected || !state.gameActive) return;
-  state.playerHP=100; camera.position.set(0,1.7,(MAP_PRESETS[mapSelect.value]||MAP_PRESETS.range).cameraZ);
+  state.playerHP=100; state.spectatingId=null; camera.position.set(0,1.7,(MAP_PRESETS[mapSelect.value]||MAP_PRESETS.range).cameraZ);
   document.querySelector('#player-health > div').style.width='100%'; netSetStatus('P2P MATCH — リスポーン完了');
 }
 function updateBots(dt){
@@ -2249,7 +2267,8 @@ function animate(){
   lastTime = now;
 
   if(net.connected && now-net.lastSend>50){ net.lastSend=now; netSend({type:'state',x:camera.position.x,y:camera.position.y,z:camera.position.z,yaw:state.viewYaw,pitch:state.viewPitch}); }
-  if(state.gameActive && !settingsPanel.classList.contains('show')){
+  if(state.spectatingId){ const killer=remotePlayers.get(state.spectatingId); if(killer){ camera.position.lerp(killer.position.clone().add(new THREE.Vector3(0,1.7,1.6)),.12); camera.lookAt(killer.position.clone().add(new THREE.Vector3(0,1.35,0))); } }
+  if(state.gameActive && !state.spectatingId && !settingsPanel.classList.contains('show')){
     if(updateGamepad(dt)) { /* gamepad input handled above */ } else if(useTouchUI) updateMovementTouch(dt); else updateMovementPC(dt);
     tryFire(dt);
     updateReload(dt);
